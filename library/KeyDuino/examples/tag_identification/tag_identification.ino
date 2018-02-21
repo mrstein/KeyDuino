@@ -3,7 +3,7 @@ This sketch is made to be used with any ISO14443-A tag (like Mifare), to read it
 
 Author: Raymond Borenstein - CITC-EuraRFID
 
-Compatible with KeyDuino 5.1
+Compatible with KeyDuino NORMAL / KeyDuino NANO
 
 Join http://keyduino.forumsactifs.com/ to ask your questions, suggest your ideas, and show your projects!
 */
@@ -30,7 +30,8 @@ void loop(void) {
     readID = keyDuino.convertUintToString(uid, uidLength);
     Serial.print("Tag found: ");
     Serial.println(readID);
-    keyDuino.buzz(20);
+    keyDuino.buzz(20); //for NORMAL
+    keyDuino.led(100); //for NANO
     delay(250);
   }
   delay(1);

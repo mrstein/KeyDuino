@@ -29,7 +29,7 @@ void loop(void) {
   bool success;
   String readID;
   
-  success = keyDuino.inListPassiveTarget(PN532_ISO14443B); //Change to PN532_ISO14443A if needed
+  success = keyDuino.inListPassiveTarget(PN532_ISO14443B); //Change to PN532_MIFARE_ISO14443A if needed
   if (success){ //If tag was enlisted, send the SELECT_EF command
     
     uint8_t response[64];
