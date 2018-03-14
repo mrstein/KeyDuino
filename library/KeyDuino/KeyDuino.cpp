@@ -1284,20 +1284,19 @@ uint8_t KeyDuino::mifareclassic_AuthenticateSectorDefaultKeys(uint8_t sector){
     }
 
     if (authentication) {
-        Serial.print("Authentication succeeded on sector ");
-        Serial.print(sector);
-        Serial.print(" with default key ");
+        DMSG("Authentication succeeded on sector ");
+        DMSG(sector);
+        DMSG(" with default key ");
         if(!keyType)
-            Serial.print("A :");
+            DMSG("A");
     	else
-      	    Serial.print("B :");
-    	this->PrintHex(key, 6);
+      	    DMSG("B");
     	return true; 	
     }
 
-    Serial.print("Failed authentication on sector ");
-    Serial.print(sector);
-    Serial.println(" with default keys.");
+    DMSG("Failed authentication on sector ");
+    DMSG(sector);
+    DMSG(" with default keys.");
     return false;
 }
 
@@ -1338,11 +1337,10 @@ void MifareClassicKeyDuino::readSector(uint8_t sector){
         if (reading) 
             this->PrintHex(data,16);
         else {
-      	    Serial.print("   Failed reading block ");
-      	    Serial.println(block);
+      	    DMSG("   Failed reading block ");
+      	    DMSG(block);
     }
   }
-  Serial.println();
 }
 
 
@@ -1360,26 +1358,23 @@ uint8_t MifareClassicKeyDuino::authenticateDefinedKey(uint8_t key[6], int keyTyp
     uint8_t auth = this->mifareclassic_AuthenticateBlock(this->_uid, this->_uidLen, sector * 4, keyType, key);
     
     if(auth) {
-        Serial.print("Authentication succeeded on sector ");
-        Serial.print(sector);
-        Serial.print(" with key ");
+        DMSG("Authentication succeeded on sector ");
+        DMSG(sector);
+        DMSG(" with key ");
         if(!keyType)
-            Serial.print("A :");
+            DMSG("A");
         else
-            Serial.print("B :");
-        this->PrintHex(key, 6);
+            DMSG("B");
         return true;
     }
     else {
-        Serial.print("Failed authentication on sector ");
-        Serial.print(sector);
-        Serial.print(" with key ");
+        DMSG("Failed authentication on sector ");
+        DMSG(sector);
+        DMSG(" with key ");
         if(!keyType)
-            Serial.print("A :");
+            DMSG("A");
         else
-          Serial.print("B :");
-        this->PrintHex(key, 6);
-        Serial.println();
+          DMSG("B");
 	    //Re-read ID to allow to retry authentication
 	    int reAuth = this->readPassiveTargetID(PN532_MIFARE_ISO14443A, this->_uid, &this->_uidLen);
         return false;
@@ -1397,13 +1392,10 @@ uint8_t MifareClassicKeyDuino::authenticateDefinedKey(uint8_t key[6], int keyTyp
 */
 uint8_t MifareClassicKeyDuino::writeBlock(uint8_t block, uint8_t *data){
     if (this->mifareclassic_WriteDataBlock (block, data)) {
-    	Serial.print("Succeeded writing on block ");
-    	Serial.print(block);
-    	Serial.print(" with data ");
-    	this->PrintHex(data, 16);
-    	Serial.println();
+    	DMSG("Try writing on block ");
+    	DMSG(block);
     } else {
-    	Serial.print("Failed writing on block ");
-    	Serial.println(block);
+    	DMSG("Failed writing on block ");
+    	DMSG(block);
   }
 }

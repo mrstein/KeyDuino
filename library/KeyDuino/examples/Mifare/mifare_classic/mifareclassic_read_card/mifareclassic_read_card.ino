@@ -1,17 +1,20 @@
+
 /*
-This sketch is made to be used with a Mifare Classic card, and serves as an example to read its sectors.
-It uses the MifareClassicKeyDuino class, which is an extension of KeyDuino class, easing the learning with Mifare Classic.
+  This sketch is made to be used with a Mifare Classic card, and serves as an example to read its sectors.
+  It uses the MifareClassicKeyDuino class, which is an extension of KeyDuino class, easing the learning with Mifare Classic.
 
-Author: Raymond Borenstein - CITC-EuraRFID
+  Author: Raymond Borenstein - CITC-EuraRFID
 
-Compatible with KeyDuino 5.1
+  Compatible with KeyDuino 5.1
 
-Join http://keyduino.forumsactifs.com/ to ask your questions, suggest your ideas, and show your projects!
+  Join http://keyduino.forumsactifs.com/ to ask your questions, suggest your ideas, and show your projects!
 */
 
 #include <KeyDuino.h>
 
-//Define here the keys of each sector of your Mifare Classic card, if you know them. 
+#define MIFARE_SIZE 16 // Defined data size: 16 if card is Mifare 1K, 64 if Mifare 4K
+
+//Define here the keys of each sector of your Mifare Classic card, if you know them.
 //Otherwise, only typical default keys will be used.
 
 //Defined A-Keys Array
@@ -56,12 +59,12 @@ uint8_t definedKeysB[16][6] = {
 
 MifareClassicKeyDuino keyDuino;
 
-uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 }; 
+uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };
 uint8_t uidLength;
 
 void setup(void) {
   Serial.begin(115200);
-  
+
   keyDuino.begin();
 
   keyDuino.SAMConfig();
@@ -79,13 +82,17 @@ void loop(void) {
     if (uidLength == 4) {
       Serial.print("Mifare Classic identified: UID: ");
       keyDuino.PrintHex(uid, uidLength);
-      
-      for (int i = 0 ; i < 16 ; i++) { // 16 if card is Mifare 1K, 64 if Mifare 4K
+
+      for (int sector = 0 ; sector < MIFARE_SIZE ; sector++) { // 16 if card is Mifare 1K, 64 if Mifare 4K
         //Try authentication with defined key A, then B, then default keys.
-        if (keyDuino.authenticateDefinedKey(definedKeysA[i], MIFARE_KEY_A, i) || 
-	      keyDuino.authenticateDefinedKey(definedKeysB[i], MIFARE_KEY_B, i) || 
-	      keyDuino.mifareclassic_AuthenticateSectorDefaultKeys(i))
-            keyDuino.readSector(i);       
+        if (keyDuino.authenticateDefinedKey(definedKeysA[sector], MIFARE_KEY_A, sector) || keyDuino.authenticateDefinedKey(definedKeysB[sector], MIFARE_KEY_B, sector) || keyDuino.mifareclassic_AuthenticateSectorDefaultKeys(sector)){
+          Serial.print("---------------------\n Sector ");  Serial.println(sector);
+          keyDuino.readSector(sector);
+        }
+        else {
+          Serial.print("Failed authentication on sector ");
+          Serial.println(sector);
+        }
       }
       delay(500);
       Serial.println("Operation complete.");
