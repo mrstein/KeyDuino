@@ -627,7 +627,7 @@ uint8_t KeyDuino::mifareclassic_ReadDataBlock (uint8_t blockNumber, uint8_t *dat
                           1KB cards, and 0..255 for 4KB cards).
     @param  data          The byte array that contains the data to write.
 
-    @returns 1 if everything executed properly, 0 for an error (may not works)
+    @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
 uint8_t KeyDuino::mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t *data)
@@ -1388,20 +1388,12 @@ uint8_t MifareClassicKeyDuino::authenticateDefinedKey(uint8_t key[6], int keyTyp
     @param    block  the block you are trying to write on
     @param    data   the data you wish to write
 
-    @returns  1 if writing succeeded, 0 if it failed 
+    @returns  1 if writing succeeded, 0 if it failed
 */
 uint8_t MifareClassicKeyDuino::writeBlock(uint8_t block, uint8_t *data){
     if (this->mifareclassic_WriteDataBlock (block, data)) {
-<<<<<<< HEAD
-    	Serial.print("try writing on block ");
-    	Serial.print(block);
-    	Serial.print(" with data ");
-    	this->PrintHex(data, 16);
-    	Serial.println();
-=======
     	DMSG("Try writing on block ");
     	DMSG(block);
->>>>>>> 1ed5b9dc2acd36fe3a4cf8dff38866d345871802
     } else {
     	DMSG("Failed writing on block ");
     	DMSG(block);
