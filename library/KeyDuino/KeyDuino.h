@@ -160,6 +160,8 @@ public:
     bool readPassiveTargetID_B(uint8_t *uid, uint8_t *uidLength, uint16_t timeout = 1000);
     bool inDataExchange(uint8_t *send, uint8_t sendLength, uint8_t *response, uint8_t *responseLength);
 
+	uint8_t ntag21x_auth(const uint8_t *key);
+		
     // Mifare Classic functions
     bool mifareclassic_IsFirstBlock (uint32_t uiBlock);
     bool mifareclassic_IsTrailerBlock (uint32_t uiBlock);

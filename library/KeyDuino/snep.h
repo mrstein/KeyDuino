@@ -5,7 +5,7 @@
 
 #include "llcp.h"
 
-#define SNEP_DEFAULT_VERSION	0x10	// Major: 1, Minor: 0
+#define SNEP_DEFAULT_VERSION	0x00	// Major: 1, Minor: 0
 
 #define SNEP_REQUEST_PUT	0x02
 #define SNEP_REQUEST_GET	0x01

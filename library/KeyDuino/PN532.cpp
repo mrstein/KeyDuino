@@ -1,53 +1,34 @@
 /**************************************************************************/
 /*!
-    @file     KeyDuino.cpp
-    @author   Adafruit Industries & Seeed Studio & CITC EuraRFID
+    @file     PN532.cpp
+    @author   Adafruit Industries & Seeed Studio
     @license  BSD
 */
 /**************************************************************************/
 
-#include "KeyDuino.h"
 #include "Arduino.h"
+#include "PN532.h"
+#include "PN532_debug.h"
 #include <string.h>
-#include <stdint.h>
 
-//#define DEBUG
+#define HAL(func)   (_interface->func)
 
-#define HAL(func)   (this->func)
-#ifdef DEBUG
-#define DMSG(args...)       Serial.print(args)
-#define DMSG_STR(str)       Serial.println(str)
-#define DMSG_HEX(num)       Serial.print(' '); Serial.print(num, HEX)
-#define DMSG_INT(num)       Serial.print(' '); Serial.print(num)
-#else
-#define DMSG(args...)
-#define DMSG_STR(str)
-#define DMSG_HEX(num)
-#define DMSG_INT(num)
-#endif
+PN532::PN532(PN532Interface &interface)
+{
+    _interface = &interface;
+}
 
-#define PN532_PREAMBLE                (0x00)
-#define PN532_STARTCODE1              (0x00)
-#define PN532_STARTCODE2              (0xFF)
-#define PN532_POSTAMBLE               (0x00)
+/**************************************************************************/
+/*!
+    @brief  Setups the HW
+*/
+/**************************************************************************/
+void PN532::begin()
+{
+    HAL(begin)();
+    HAL(wakeup)();
+}
 
-#define PN532_HOSTTOPN532             (0xD4)
-#define PN532_PN532TOHOST             (0xD5)
-
-#define PN532_ACK_WAIT_TIME           (10)  // ms, timeout of waiting for ACK
-
-#define PN532_INVALID_ACK             (-1)
-#define PN532_TIMEOUT                 (-2)
-#define PN532_INVALID_FRAME           (-3)
-#define PN532_NO_SPACE                (-4)
-
-#define REVERSE_BITS_ORDER(b)         b = (b & 0xF0) >> 4 | (b & 0x0F) << 4; \
-                                      b = (b & 0xCC) >> 2 | (b & 0x33) << 2; \
-                                      b = (b & 0xAA) >> 1 | (b & 0x55) << 1
-
-#define BUZZER_PIN 		      15
-#define LED_PIN 		      2
-									  
 /**************************************************************************/
 /*!
     @brief  Prints a hexadecimal value in plain characters
@@ -56,7 +37,7 @@
     @param  numBytes  Data length in bytes
 */
 /**************************************************************************/
-void KeyDuino::PrintHex(const uint8_t *data, const uint32_t numBytes)
+void PN532::PrintHex(const uint8_t *data, const uint32_t numBytes)
 {
 #ifdef ARDUINO
     for (uint8_t i = 0; i < numBytes; i++) {
@@ -87,7 +68,7 @@ void KeyDuino::PrintHex(const uint8_t *data, const uint32_t numBytes)
     @param  numBytes  Data length in bytes
 */
 /**************************************************************************/
-void KeyDuino::PrintHexChar(const uint8_t *data, const uint32_t numBytes)
+void PN532::PrintHexChar(const uint8_t *data, const uint32_t numBytes)
 {
 #ifdef ARDUINO
     for (uint8_t i = 0; i < numBytes; i++) {
@@ -125,28 +106,6 @@ void KeyDuino::PrintHexChar(const uint8_t *data, const uint32_t numBytes)
 #endif
 }
 
-
-/**************************************************************************/
-/*!
-    @brief  Returns a hexadecimal value in plain characters
-
-    @param  data      Pointer to the uint8_t data
-    @param  numBytes  Data length in bytes
-
-    @returns  The data converted to a string
-*/
-/**************************************************************************/
-String KeyDuino::convertUintToString(const uint8_t *data, const uint8_t numBytes)
-{
-	String result;
-	for (uint8_t i=0; i < numBytes; i++) {
-	    if (data[i] < 0x10)
-            	result += "0";
-      	    result += String(data[i], HEX);
-	}
-    	return(result);
-}
-
 /**************************************************************************/
 /*!
     @brief  Checks the firmware version of the PN5xx chip
@@ -154,7 +113,7 @@ String KeyDuino::convertUintToString(const uint8_t *data, const uint8_t numBytes
     @returns  The chip's firmware version and ID
 */
 /**************************************************************************/
-uint32_t KeyDuino::getFirmwareVersion(void)
+uint32_t PN532::getFirmwareVersion(void)
 {
     uint32_t response;
 
@@ -203,7 +162,7 @@ uint32_t KeyDuino::getFirmwareVersion(void)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-bool KeyDuino::writeGPIO(uint8_t pinstate)
+bool PN532::writeGPIO(uint8_t pinstate)
 {
     // Make sure pinstate does not try to toggle P32 or P34
     pinstate |= (1 << PN532_GPIO_P32) | (1 << PN532_GPIO_P34);
@@ -213,7 +172,7 @@ bool KeyDuino::writeGPIO(uint8_t pinstate)
     pn532_packetbuffer[1] = PN532_GPIO_VALIDATIONBIT | pinstate;  // P3 Pins
     pn532_packetbuffer[2] = 0x00;    // P7 GPIO Pins (not used ... taken by I2C)
 
-    DMSG_STR("Writing P3 GPIO: ");
+    DMSG("Writing P3 GPIO: ");
     DMSG_HEX(pn532_packetbuffer[1]);
     DMSG("\n");
 
@@ -238,7 +197,7 @@ bool KeyDuino::writeGPIO(uint8_t pinstate)
              pinState[5]  = P35
 */
 /**************************************************************************/
-uint8_t KeyDuino::readGPIO(void)
+uint8_t PN532::readGPIO(void)
 {
     pn532_packetbuffer[0] = PN532_COMMAND_READGPIO;
 
@@ -271,14 +230,14 @@ uint8_t KeyDuino::readGPIO(void)
     @brief  Configures the SAM (Secure Access Module)
 */
 /**************************************************************************/
-bool KeyDuino::SAMConfig(void)
+bool PN532::SAMConfig(void)
 {
     pn532_packetbuffer[0] = PN532_COMMAND_SAMCONFIGURATION;
     pn532_packetbuffer[1] = 0x01; // normal mode;
     pn532_packetbuffer[2] = 0x14; // timeout 50ms * 20 = 1 second
     pn532_packetbuffer[3] = 0x01; // use IRQ pin!
 
-    DMSG_STR("SAMConfig");
+    DMSG("SAMConfig\n");
 
     if (HAL(writeCommand)(pn532_packetbuffer, 4))
         return false;
@@ -296,7 +255,7 @@ bool KeyDuino::SAMConfig(void)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-bool KeyDuino::setPassiveActivationRetries(uint8_t maxRetries)
+bool PN532::setPassiveActivationRetries(uint8_t maxRetries)
 {
     pn532_packetbuffer[0] = PN532_COMMAND_RFCONFIGURATION;
     pn532_packetbuffer[1] = 5;    // Config item 5 (MaxRetries)
@@ -310,52 +269,35 @@ bool KeyDuino::setPassiveActivationRetries(uint8_t maxRetries)
     return (0 < HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer)));
 }
 
-
-/***** ISO14443 Commands ******/
-
-/**
-    @brief    calls the right function to read the tag UID, according to type (cardbaudrate)
-
-    @param    cardbaudrate  Baud rate of the card
-    @param    uid     the var to write the uid
-    @param    uidLen  the var to write the uid
-
-    @returns  1 if the UID was correctly read, 0 if reading failed
-*/
-uint8_t KeyDuino::readTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *uidLength){
-    if(cardbaudrate == PN532_ISO14443B)
-        return readPassiveTargetID_B(uid, uidLength);
-    return readPassiveTargetID(cardbaudrate, uid, uidLength);
-}
-
+/***** ISO14443A Commands ******/
 
 /**************************************************************************/
 /*!
     Waits for an ISO14443A target to enter the field
 
-    @param  cardbaudrate  Baud rate of the card
+    @param  cardBaudRate  Baud rate of the card
     @param  uid           Pointer to the array that will be populated
                           with the card's UID (up to 7 bytes)
     @param  uidLength     Pointer to the variable that will hold the
                           length of the card's UID.
+    @param  timeout       The number of tries before timing out
+    @param  inlist        If set to true, the card will be inlisted
 
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-bool KeyDuino::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *uidLength, uint16_t timeout)
+bool PN532::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *uidLength, uint16_t timeout, bool inlist)
 {
     pn532_packetbuffer[0] = PN532_COMMAND_INLISTPASSIVETARGET;
     pn532_packetbuffer[1] = 1;  // max 1 cards at once (we can set this to 2 later)
     pn532_packetbuffer[2] = cardbaudrate;
 
     if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
-        DMSG_STR("\nFailed writing");
         return 0x0;  // command failed
     }
 
     // read data packet
     if (HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer), timeout) < 0) {
-        DMSG_STR("\nFailed reading response");
         return 0x0;
     }
 
@@ -375,112 +317,25 @@ bool KeyDuino::readPassiveTargetID(uint8_t cardbaudrate, uint8_t *uid, uint8_t *
     if (pn532_packetbuffer[0] != 1)
         return 0;
 
-    inListedTag = pn532_packetbuffer[1];
-
     uint16_t sens_res = pn532_packetbuffer[2];
     sens_res <<= 8;
     sens_res |= pn532_packetbuffer[3];
 
-    DMSG("\nATQA: 0x");  DMSG_HEX(sens_res);
-    DMSG("\nSAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
+    DMSG("ATQA: 0x");  DMSG_HEX(sens_res);
+    DMSG("SAK: 0x");  DMSG_HEX(pn532_packetbuffer[4]);
     DMSG("\n");
 
     /* Card appears to be Mifare Classic */
     *uidLength = pn532_packetbuffer[5];
-    this->_uidLen = pn532_packetbuffer[5];
 
     for (uint8_t i = 0; i < pn532_packetbuffer[5]; i++) {
         uid[i] = pn532_packetbuffer[6 + i];
-	    this->_uid[i] = pn532_packetbuffer[6 + i];
-    }
-    return 1;
-}
-
-
-/**************************************************************************/
-/*!
-    Waits for an ISO14443B target to enter the field
-
-    @param  uid           Pointer to the array that will be populated
-                          with the card's PUPI (normally 4 bytes)
-    @param  uidLength     Pointer to the variable that will hold the
-                          length of the card's UID.
-
-    @returns 1 if everything executed properly, 0 for an error
-*/
-/**************************************************************************/
-bool KeyDuino::readPassiveTargetID_B(uint8_t *uid, uint8_t *uidLength, uint16_t timeout)
-{
-    pn532_packetbuffer[0] = PN532_COMMAND_INLISTPASSIVETARGET;
-    pn532_packetbuffer[1] = 1;  // max 1 cards at once (we can set this to 2 later)
-    pn532_packetbuffer[2] = PN532_ISO14443B;
-    pn532_packetbuffer[3] = 0x00; //AFI
-
-    if (HAL(writeCommand)(pn532_packetbuffer, 4)) {
-        DMSG_STR("\nFailed writing");
-        return 0x0;  // command failed
     }
 
-    // read data packet
-    if (HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer), timeout) < 0) {
-        DMSG_STR("\nFailed reading response");
-        return 0x0;
+    if (inlist) {
+        inListedTag = pn532_packetbuffer[1];
     }
 
-
-    /* ISO14443B card response should be in the following format:
-
-      byte                  Description
-      ------------------    ------------------------------------------
-      b0                    Tags Found
-      b1                    Tag Number (only one used in this example)
-      b2..13                ATQB
-      b14                   ATTRIB_RES Length
-      b15..ATTRIB_RESLen    ATTRIB_RES
-    */
-
-    if (pn532_packetbuffer[0] != 1)
-        return 0;
-
-    inListedTag = pn532_packetbuffer[1];
-
-    /* ISO14443B ATQ_B format:
-
-      byte          Description
-      -----         ------------------------------------------
-      b0            0x50
-      b1..4         PUPI
-      b5..8         Application Data
-      b9            Bit Rate Capacity
-      b10           Max Frame Size/-4 Info
-      b11           FWI/Coding Options
-    */
-
-    uint8_t atqb[12];
-    DMSG("\nATQ_B: ");
-    if (pn532_packetbuffer[2] == 0x50) {        //Looking for the 0x50 to check if ATQ_B is well shaped
-        for (uint8_t i = 0; i < 12; i++) {
-            atqb[i] = pn532_packetbuffer[i+2];
-            DMSG_HEX(atqb[i]);
-        }
-        DMSG("\n");
-    } else                                      //Sometimes there are remnant bytes, in that case just let it go ...
-        return 0;
-
-    DMSG_STR("\nATTRIB_RES: ");
-    for (uint8_t i = 0; i < pn532_packetbuffer[14]; i++) {
-        DMSG_HEX(pn532_packetbuffer[15 + i]);
-    }
-    DMSG("\n");
-
-    *uidLength = 4;
-    this->_uidLen = 4;
-
-    for (uint8_t i = 0; i < 4; i++) {
-        uid[i] = atqb[1 + i];
-	    this->_uid[i] = atqb[1 + i];
-    }
-    
     return 1;
 }
 
@@ -493,7 +348,7 @@ bool KeyDuino::readPassiveTargetID_B(uint8_t *uid, uint8_t *uidLength, uint16_t 
       in the sector (block 0 relative to the current sector)
 */
 /**************************************************************************/
-bool KeyDuino::mifareclassic_IsFirstBlock (uint32_t uiBlock)
+bool PN532::mifareclassic_IsFirstBlock (uint32_t uiBlock)
 {
     // Test if we are in the small or big sectors
     if (uiBlock < 128)
@@ -507,7 +362,7 @@ bool KeyDuino::mifareclassic_IsFirstBlock (uint32_t uiBlock)
       Indicates whether the specified block number is the sector trailer
 */
 /**************************************************************************/
-bool KeyDuino::mifareclassic_IsTrailerBlock (uint32_t uiBlock)
+bool PN532::mifareclassic_IsTrailerBlock (uint32_t uiBlock)
 {
     // Test if we are in the small or big sectors
     if (uiBlock < 128)
@@ -515,7 +370,6 @@ bool KeyDuino::mifareclassic_IsTrailerBlock (uint32_t uiBlock)
     else
         return ((uiBlock + 1) % 16 == 0);
 }
-
 
 /**************************************************************************/
 /*!
@@ -536,7 +390,7 @@ bool KeyDuino::mifareclassic_IsTrailerBlock (uint32_t uiBlock)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareclassic_AuthenticateBlock (uint8_t *uid, uint8_t uidLen, uint32_t blockNumber, uint8_t keyNumber, uint8_t *keyData)
+uint8_t PN532::mifareclassic_AuthenticateBlock (uint8_t *uid, uint8_t uidLen, uint32_t blockNumber, uint8_t keyNumber, uint8_t *keyData)
 {
     uint8_t i;
 
@@ -572,7 +426,6 @@ uint8_t KeyDuino::mifareclassic_AuthenticateBlock (uint8_t *uid, uint8_t uidLen,
     return 1;
 }
 
-
 /**************************************************************************/
 /*!
     Tries to read an entire 16-bytes data block at the specified block
@@ -586,7 +439,7 @@ uint8_t KeyDuino::mifareclassic_AuthenticateBlock (uint8_t *uid, uint8_t uidLen,
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareclassic_ReadDataBlock (uint8_t blockNumber, uint8_t *data)
+uint8_t PN532::mifareclassic_ReadDataBlock (uint8_t blockNumber, uint8_t *data)
 {
     DMSG("Trying to read 16 bytes from block ");
     DMSG_INT(blockNumber);
@@ -617,7 +470,6 @@ uint8_t KeyDuino::mifareclassic_ReadDataBlock (uint8_t blockNumber, uint8_t *dat
     return 1;
 }
 
-
 /**************************************************************************/
 /*!
     Tries to write an entire 16-bytes data block at the specified block
@@ -630,7 +482,7 @@ uint8_t KeyDuino::mifareclassic_ReadDataBlock (uint8_t blockNumber, uint8_t *dat
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t *data)
+uint8_t PN532::mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t *data)
 {
     /* Prepare the first command */
     pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;
@@ -648,7 +500,6 @@ uint8_t KeyDuino::mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t *da
     return (0 < HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer)));
 }
 
-
 /**************************************************************************/
 /*!
     Formats a Mifare Classic card to store NDEF Records
@@ -656,7 +507,7 @@ uint8_t KeyDuino::mifareclassic_WriteDataBlock (uint8_t blockNumber, uint8_t *da
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareclassic_FormatNDEF (void)
+uint8_t PN532::mifareclassic_FormatNDEF (void)
 {
     uint8_t sectorbuffer1[16] = {0x14, 0x01, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1};
     uint8_t sectorbuffer2[16] = {0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1, 0x03, 0xE1};
@@ -678,7 +529,6 @@ uint8_t KeyDuino::mifareclassic_FormatNDEF (void)
     return 1;
 }
 
-
 /**************************************************************************/
 /*!
     Writes an NDEF URI Record to the specified sector (1..15)
@@ -697,7 +547,7 @@ uint8_t KeyDuino::mifareclassic_FormatNDEF (void)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriIdentifier, const char *url)
+uint8_t PN532::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriIdentifier, const char *url)
 {
     // Figure out how long the string is
     uint8_t len = strlen(url);
@@ -726,7 +576,7 @@ uint8_t KeyDuino::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriI
         // 0xFE needs to be wrapped around to next block
         memcpy (sectorbuffer1 + 9, url, len);
         sectorbuffer2[0] = 0xFE;
-    } else if ((len > 7) || (len <= 22)) {
+    } else if ((len > 7) && (len <= 22)) {
         // Url fits in two blocks
         memcpy (sectorbuffer1 + 9, url, 7);
         memcpy (sectorbuffer2, url + 7, len - 7);
@@ -740,8 +590,8 @@ uint8_t KeyDuino::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriI
         // Url fits in three blocks
         memcpy (sectorbuffer1 + 9, url, 7);
         memcpy (sectorbuffer2, url + 7, 16);
-        memcpy (sectorbuffer3, url + 23, len - 24);
-        sectorbuffer3[len - 22] = 0xFE;
+        memcpy (sectorbuffer3, url + 23, len - 23);
+        sectorbuffer3[len - 23] = 0xFE;
     }
 
     // Now write all three blocks back to the card
@@ -758,7 +608,6 @@ uint8_t KeyDuino::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriI
     return 1;
 }
 
-
 /***** Mifare Ultralight Functions ******/
 
 /**************************************************************************/
@@ -770,13 +619,8 @@ uint8_t KeyDuino::mifareclassic_WriteNDEFURI (uint8_t sectorNumber, uint8_t uriI
                         retrieved data (if any)
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareultralight_ReadPage (uint8_t page, uint8_t *buffer)
+uint8_t PN532::mifareultralight_ReadPage (uint8_t page, uint8_t *buffer)
 {
-    if (page >= 64) {
-        DMSG("Page value out of range\n");
-        return 0;
-    }
-
     /* Prepare the command */
     pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;
     pn532_packetbuffer[1] = 1;                   /* Card number */
@@ -807,7 +651,6 @@ uint8_t KeyDuino::mifareultralight_ReadPage (uint8_t page, uint8_t *buffer)
     return 1;
 }
 
-
 /**************************************************************************/
 /*!
     Tries to write an entire 4-bytes data buffer at the specified page
@@ -819,7 +662,7 @@ uint8_t KeyDuino::mifareultralight_ReadPage (uint8_t page, uint8_t *buffer)
     @returns 1 if everything executed properly, 0 for an error
 */
 /**************************************************************************/
-uint8_t KeyDuino::mifareultralight_WritePage (uint8_t page, uint8_t *buffer)
+uint8_t PN532::mifareultralight_WritePage (uint8_t page, uint8_t *buffer)
 {
     /* Prepare the first command */
     pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;
@@ -837,7 +680,6 @@ uint8_t KeyDuino::mifareultralight_WritePage (uint8_t page, uint8_t *buffer)
     return (0 < HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer)));
 }
 
-
 /**************************************************************************/
 /*!
     @brief  Exchanges an APDU with the currently inlisted peer
@@ -848,29 +690,24 @@ uint8_t KeyDuino::mifareultralight_WritePage (uint8_t page, uint8_t *buffer)
     @param  responseLength  Pointer to the response data length
 */
 /**************************************************************************/
-bool KeyDuino::inDataExchange(uint8_t *send, uint8_t sendLength, uint8_t *response, uint8_t *responseLength)
+bool PN532::inDataExchange(uint8_t *send, uint8_t sendLength, uint8_t *response, uint8_t *responseLength)
 {
     uint8_t i;
 
-    DMSG_STR("\ninDataExchange");
-
-    pn532_packetbuffer[0] = PN532_COMMAND_INDATAEXCHANGE;
+    pn532_packetbuffer[0] = 0x40; // PN532_COMMAND_INDATAEXCHANGE;
     pn532_packetbuffer[1] = inListedTag;
 
     if (HAL(writeCommand)(pn532_packetbuffer, 2, send, sendLength)) {
-        DMSG_STR("\nWrite error");
         return false;
     }
 
     int16_t status = HAL(readResponse)(response, *responseLength, 1000);
     if (status < 0) {
-        DMSG("\nStatus error: ");
-        DMSG_STR(status);
         return false;
     }
 
     if ((response[0] & 0x3f) != 0) {
-        DMSG_STR("\nStatus code indicates an error");
+        DMSG("Status code indicates an error\n");
         return false;
     }
 
@@ -889,31 +726,25 @@ bool KeyDuino::inDataExchange(uint8_t *send, uint8_t sendLength, uint8_t *respon
     return true;
 }
 
-
 /**************************************************************************/
 /*!
     @brief  'InLists' a passive target. PN532 acting as reader/initiator,
             peer acting as card/responder.
 */
 /**************************************************************************/
-bool KeyDuino::inListPassiveTarget(uint8_t cardbaudrate, uint16_t timeout)
+bool PN532::inListPassiveTarget()
 {
     pn532_packetbuffer[0] = PN532_COMMAND_INLISTPASSIVETARGET;
     pn532_packetbuffer[1] = 1;
-    pn532_packetbuffer[2] = cardbaudrate;
+    pn532_packetbuffer[2] = 0;
 
-    DMSG_STR("\ninList passive target");
+    DMSG("inList passive target\n");
 
-    if(cardbaudrate == PN532_ISO14443B){
-        pn532_packetbuffer[3] = 0x00;
-        if (HAL(writeCommand)(pn532_packetbuffer, 4))
-            return false;
-    } else {
-        if (HAL(writeCommand)(pn532_packetbuffer, 3))
-            return false;
+    if (HAL(writeCommand)(pn532_packetbuffer, 3)) {
+        return false;
     }
 
-    int16_t status = HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer), timeout);
+    int16_t status = HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer), 30000);
     if (status < 0) {
         return false;
     }
@@ -927,8 +758,7 @@ bool KeyDuino::inListPassiveTarget(uint8_t cardbaudrate, uint16_t timeout)
     return true;
 }
 
-
-int8_t KeyDuino::tgInitAsTarget(const uint8_t* command, const uint8_t len, const uint16_t timeout){
+int8_t PN532::tgInitAsTarget(const uint8_t* command, const uint8_t len, const uint16_t timeout){
   
   int8_t status = HAL(writeCommand)(command, len);
     if (status < 0) {
@@ -945,11 +775,10 @@ int8_t KeyDuino::tgInitAsTarget(const uint8_t* command, const uint8_t len, const
     }
 }
 
-
 /**
  * Peer to Peer
  */
-int8_t KeyDuino::tgInitAsTarget(uint16_t timeout)
+int8_t PN532::tgInitAsTarget(uint16_t timeout)
 {
     const uint8_t command[] = {
         PN532_COMMAND_TGINITASTARGET,
@@ -964,13 +793,13 @@ int8_t KeyDuino::tgInitAsTarget(uint16_t timeout)
 
         0x01, 0xFE, 0x0F, 0xBB, 0xBA, 0xA6, 0xC9, 0x89, 0x00, 0x00, //NFCID3t: Change this to desired value
 
-        0x06, 0x46,  0x66, 0x6D, 0x01, 0x01, 0x10, 0x00// LLCP magic number and version parameter
+        0x0a, 0x46,  0x66, 0x6D, 0x01, 0x01, 0x10, 0x02, 0x02, 0x00, 0x80, // LLCP magic number, version parameter and MIUX
+        0x00
     };
     return tgInitAsTarget(command, sizeof(command), timeout);
 }
 
-
-int16_t KeyDuino::tgGetData(uint8_t *buf, uint8_t len)
+int16_t PN532::tgGetData(uint8_t *buf, uint8_t len)
 {
     buf[0] = PN532_COMMAND_TGGETDATA;
 
@@ -998,8 +827,7 @@ int16_t KeyDuino::tgGetData(uint8_t *buf, uint8_t len)
     return length;
 }
 
-
-bool KeyDuino::tgSetData(const uint8_t *header, uint8_t hlen, const uint8_t *body, uint8_t blen)
+bool PN532::tgSetData(const uint8_t *header, uint8_t hlen, const uint8_t *body, uint8_t blen)
 {
     if (hlen > (sizeof(pn532_packetbuffer) - 1)) {
         if ((body != 0) || (header == pn532_packetbuffer)) {
@@ -1033,8 +861,7 @@ bool KeyDuino::tgSetData(const uint8_t *header, uint8_t hlen, const uint8_t *bod
     return true;
 }
 
-
-int16_t KeyDuino::inRelease(const uint8_t relevantTarget){
+int16_t PN532::inRelease(const uint8_t relevantTarget){
 
     pn532_packetbuffer[0] = PN532_COMMAND_INRELEASE;
     pn532_packetbuffer[1] = relevantTarget;
@@ -1045,362 +872,9 @@ int16_t KeyDuino::inRelease(const uint8_t relevantTarget){
 
     // read data packet
     return HAL(readResponse)(pn532_packetbuffer, sizeof(pn532_packetbuffer));
-
 }
 
-
-KeyDuino::KeyDuino()
-{
-    _serial = &Serial1;
-    command = 0;
-    //_interface = this;
-}
-
-
-void KeyDuino::begin()
-{
-    _serial->begin(115200);
-    wakeup();
-    SAMConfig();
-    pinMode(BUZZER_PIN, OUTPUT);
-	pinMode(LED_PIN, OUTPUT);
-}
-
-
-void KeyDuino::wakeup()
-{
-    _serial->write(0x55);
-    _serial->write(0x55);
-    _serial->write(0);
-    _serial->write(0);
-    _serial->write(0);
-
-    /** dump serial buffer */
-    if(_serial->available()){
-        DMSG("\nDump serial buffer: ");
-    }
-    while(_serial->available()){
-        uint8_t ret = _serial->read();
-        DMSG_HEX(ret);
-    }
-
-}
-
-
-int8_t KeyDuino::writeCommand(const uint8_t *header, uint8_t hlen, const uint8_t *body, uint8_t blen)
-{
-
-    /** dump serial buffer */
-    if(_serial->available()){
-        DMSG("\nDump serial buffer: ");
-    }
-    while(_serial->available()){
-        uint8_t ret = _serial->read();
-        DMSG_HEX(ret);
-    }
-
-    command = header[0];
-    
-    _serial->write(PN532_PREAMBLE);
-    _serial->write(PN532_STARTCODE1);
-    _serial->write(PN532_STARTCODE2);
-    
-    uint8_t length = hlen + blen + 1;   // length of data field: TFI + DATA
-    _serial->write(length);
-    _serial->write(~length + 1);         // checksum of length
-    
-    _serial->write(PN532_HOSTTOPN532);
-    uint8_t sum = PN532_HOSTTOPN532;    // sum of TFI + DATA
-
-    DMSG("\nWrite: ");
-    
-    _serial->write(header, hlen);
-    for (uint8_t i = 0; i < hlen; i++) {
-        sum += header[i];
-
-        DMSG_HEX(header[i]);
-    }
-
-    _serial->write(body, blen);
-    for (uint8_t i = 0; i < blen; i++) {
-        sum += body[i];
-
-        DMSG_HEX(body[i]);
-    }
-    
-    uint8_t checksum = ~sum + 1;            // checksum of TFI + DATA
-    _serial->write(checksum);
-    _serial->write(PN532_POSTAMBLE);
-
-    return readAckFrame();
-}
-
-
-int16_t KeyDuino::readResponse(uint8_t buf[], uint8_t len, uint16_t timeout)
-{
-    uint8_t tmp[3];
-
-    DMSG("\nRead:  ");
-    
-    /** Frame Preamble and Start Code */
-    if(receive(tmp, 3, timeout)<=0){
-        return PN532_TIMEOUT;
-    }
-    if(0 != tmp[0] || 0!= tmp[1] || 0xFF != tmp[2]){
-        DMSG("Preamble error");
-        return PN532_INVALID_FRAME;
-    }
-    
-    /** receive length and check */
-    uint8_t length[2];
-    if(receive(length, 2, timeout) <= 0){
-        return PN532_TIMEOUT;
-    }
-    if( 0 != (uint8_t)(length[0] + length[1]) ){
-        DMSG("Length error");
-        return PN532_INVALID_FRAME;
-    }
-    length[0] -= 2;
-    if( length[0] > len){
-        return PN532_NO_SPACE;
-    }
-    
-    /** receive command byte */
-    uint8_t cmd = command + 1;               // response command
-    if(receive(tmp, 2, timeout) <= 0){
-        return PN532_TIMEOUT;
-    }
-    if( PN532_PN532TOHOST != tmp[0] || cmd != tmp[1]){
-        DMSG("Command error");
-        return PN532_INVALID_FRAME;
-    }
-    
-    if(receive(buf, length[0], timeout) != length[0]){
-        return PN532_TIMEOUT;
-    }
-    uint8_t sum = PN532_PN532TOHOST + cmd;
-    for(uint8_t i=0; i<length[0]; i++){
-        sum += buf[i];
-    }
-    
-    /** checksum and postamble */
-    if(receive(tmp, 2, timeout) <= 0){
-        return PN532_TIMEOUT;
-    }
-    if( 0 != (uint8_t)(sum + tmp[0]) || 0 != tmp[1] ){
-        DMSG("Checksum error");
-        return PN532_INVALID_FRAME;
-    }
-    
-    return length[0];
-}
-
-
-int8_t KeyDuino::readAckFrame()
-{
-    const uint8_t PN532_ACK[] = {0, 0, 0xFF, 0, 0xFF, 0};
-    uint8_t ackBuf[sizeof(PN532_ACK)];
-    
-    DMSG("\nAck: ");
-    
-    if( receive(ackBuf, sizeof(PN532_ACK), PN532_ACK_WAIT_TIME) <= 0 ){
-        DMSG("Timeout\n");
-        return PN532_TIMEOUT;
-    }
-    
-    if( memcmp(ackBuf, PN532_ACK, sizeof(PN532_ACK)) ){
-        DMSG("Invalid\n");
-        return PN532_INVALID_ACK;
-    }
-    return 0;
-}
-
-
-/**
-    @brief receive data .
-    @param buf --> return value buffer.
-           len --> length expect to receive.
-           timeout --> time of reveiving
-    @retval number of received bytes, 0 means no data received.
-*/
-int8_t KeyDuino::receive(uint8_t *buf, int len, uint16_t timeout)
-{
-  int read_bytes = 0;
-  int ret;
-  unsigned long start_millis;
-  
-  while (read_bytes < len) {
-    start_millis = millis();
-    do {
-      ret = _serial->read();
-      if (ret >= 0) {
-        break;
-     }
-    } while((timeout == 0) || ((millis()- start_millis ) < timeout));
-    
-    if (ret < 0) {
-        if(read_bytes){
-            return read_bytes;
-        }else{
-            return PN532_TIMEOUT;
-        }
-    }
-    buf[read_bytes] = (uint8_t)ret;
-    DMSG_HEX(ret);
-    read_bytes++;
-  }
-  return read_bytes;
-}
-
-
-/**
-    @brief    try authentication with mifare classic default keys
-
-    @param    sector  the sector number to authenticate to
-
-    @returns  1 if authentication succeeded, 0 if it failed 
-*/
-uint8_t KeyDuino::mifareclassic_AuthenticateSectorDefaultKeys(uint8_t sector){
-    uint8_t authentication;
-    uint8_t key[6];
-    int keyType;
-
-    //Try each of default keys till you find one working
-    for (int i = 0 ; i < DEFAULT_KEY_NUMBER ; i++) {
-        for (int j = 0 ; j < 6 ; j++) {
-            key[j] = this->mifareClassicDefaultKeys[i][j];
-        }
-        //Re-read ID to allow to retry authentication
-	    int reAuth = this->readPassiveTargetID(PN532_MIFARE_ISO14443A, this->_uid, &this->_uidLen);
-	    keyType = 0;
-        authentication = this->mifareclassic_AuthenticateBlock(this->_uid, this->_uidLen, 4 * sector, keyType, key); //First try with A key
-        if (authentication)
-            break;
-	    reAuth = this->readPassiveTargetID(PN532_MIFARE_ISO14443A, this->_uid, &this->_uidLen);
-	    keyType = 1;
-        authentication = this->mifareclassic_AuthenticateBlock(this->_uid, this->_uidLen, 4 * sector, keyType, key); //Then try with B key
-        if (authentication)
-            break;
-    }
-
-    if (authentication) {
-        DMSG("Authentication succeeded on sector ");
-        DMSG(sector);
-        DMSG(" with default key ");
-        if(!keyType)
-            DMSG("A");
-    	else
-      	    DMSG("B");
-    	return true; 	
-    }
-
-    DMSG("Failed authentication on sector ");
-    DMSG(sector);
-    DMSG(" with default keys.");
-    return false;
-}
-
-
-/**
-    @brief    buzz for specified duration
-
-    @param    duration     duration of the buzz
-*/
-void KeyDuino::buzz(int duration){
-	digitalWrite(BUZZER_PIN, HIGH);
-	delay(duration);
-	digitalWrite(BUZZER_PIN, LOW);
-}
-
-/**
-    @brief    flash led for specified duration
-
-    @param    duration     duration of the flash
-*/
-void KeyDuino::led(int duration){
-	digitalWrite(LED_PIN, HIGH);
-	delay(duration);
-	digitalWrite(LED_PIN, LOW);
-}
-
-
-/**
-    @brief    read and print a whole sector you authenticated to
-
-    @param    sector  the sector number to read
-*/
-void MifareClassicKeyDuino::readSector(uint8_t sector){
-    uint8_t reading;
-    uint8_t data[16];
-    for (int block = 4 * sector ; block < 4 * sector + 4 ; block++) {
-        reading = this->mifareclassic_ReadDataBlock(block, data);
-        if (reading) 
-            this->PrintHex(data,16);
-        else {
-      	    DMSG("   Failed reading block ");
-      	    DMSG(block);
-    }
-  }
-}
-
-
-/**
-    @brief    authenticate with a defined key, printing the result
-
-    @param    key      the key you are trying to authenticate with
-    @param    keyType  type of key, A or B: use MIFARE_KEY_A or MIFARE_KEY_B
-    @param    sector   the sector you wish to authenticate to
-
-    @returns  1 if authentication succeeded, 0 if it failed
-*/
-uint8_t MifareClassicKeyDuino::authenticateDefinedKey(uint8_t key[6], int keyType, int sector){
-    
-    uint8_t auth = this->mifareclassic_AuthenticateBlock(this->_uid, this->_uidLen, sector * 4, keyType, key);
-    
-    if(auth) {
-        DMSG("Authentication succeeded on sector ");
-        DMSG(sector);
-        DMSG(" with key ");
-        if(!keyType)
-            DMSG("A");
-        else
-            DMSG("B");
-        return true;
-    }
-    else {
-        DMSG("Failed authentication on sector ");
-        DMSG(sector);
-        DMSG(" with key ");
-        if(!keyType)
-            DMSG("A");
-        else
-          DMSG("B");
-	    //Re-read ID to allow to retry authentication
-	    int reAuth = this->readPassiveTargetID(PN532_MIFARE_ISO14443A, this->_uid, &this->_uidLen);
-        return false;
-  }
-}
-
-
-/**
-    @brief    write data on a block, and prints the result
-
-    @param    block  the block you are trying to write on
-    @param    data   the data you wish to write
-
-    @returns  1 if writing succeeded, 0 if it failed
-*/
-uint8_t MifareClassicKeyDuino::writeBlock(uint8_t block, uint8_t *data){
-    if (this->mifareclassic_WriteDataBlock (block, data)) {
-    	DMSG("Try writing on block ");
-    	DMSG(block);
-    } else {
-    	DMSG("Failed writing on block ");
-    	DMSG(block);
-  }
-}
-
-uint8_t KeyDuino::ntag21x_auth(const uint8_t *key)
+uint8_t PN532::ntag21x_auth(const uint8_t *key)
 {
     uint8_t i;
 
@@ -1423,3 +897,4 @@ uint8_t KeyDuino::ntag21x_auth(const uint8_t *key)
 
     return 1;
 }
+
